@@ -1,3 +1,5 @@
+pub mod content;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -56,7 +58,9 @@ mod tests {
 
     #[test]
     fn default_limit_is_twenty_megabytes() {
-        let limits = ScanLimits::default();
-        assert_eq!(limits.max_file_size, 20 * 1024 * 1024);
+        assert_eq!(
+            ScanLimits::default().max_file_size,
+            20 * 1024 * 1024
+        );
     }
 }
