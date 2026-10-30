@@ -1,5 +1,6 @@
 pub mod content;
 pub mod hash;
+pub mod rules;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -40,12 +41,28 @@ impl ScanTarget {
         }
 
         if metadata.len() > limits.max_file_size {
-            return Err("File exceeds the maximum allowed size.".into());
+            return Err(format!(
+                "File exceeds the maximum allowed size of {} bytes.",
+                limits.max_file_size
+            ));
         }
 
         Ok(Self {
             path: path.to_path_buf(),
             size: metadata.len(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_limit_is_twenty_megabytes() {
+        assert_eq!(
+            ScanLimits::default().max_file_size,
+            20 * 1024 * 1024
+        );
     }
 }
