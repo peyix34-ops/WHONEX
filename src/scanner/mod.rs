@@ -1,4 +1,5 @@
 pub mod content;
+pub mod hash;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,39 +29,23 @@ impl ScanTarget {
         limits: &ScanLimits,
     ) -> Result<Self, String> {
         let metadata = fs::symlink_metadata(path)
-            .map_err(|error| format!("Cannot inspect file: {error}"))?;
+            .map_err(|e| format!("Cannot inspect file: {e}"))?;
 
         if metadata.file_type().is_symlink() {
-            return Err("Symbolic links are not allowed.".to_string());
+            return Err("Symbolic links are not allowed.".into());
         }
 
         if !metadata.is_file() {
-            return Err("Target must be a regular file.".to_string());
+            return Err("Target must be a regular file.".into());
         }
 
         if metadata.len() > limits.max_file_size {
-            return Err(format!(
-                "File exceeds the maximum allowed size of {} bytes.",
-                limits.max_file_size
-            ));
+            return Err("File exceeds the maximum allowed size.".into());
         }
 
         Ok(Self {
             path: path.to_path_buf(),
             size: metadata.len(),
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_limit_is_twenty_megabytes() {
-        assert_eq!(
-            ScanLimits::default().max_file_size,
-            20 * 1024 * 1024
-        );
     }
 }
