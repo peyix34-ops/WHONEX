@@ -1,3 +1,4 @@
+mod web;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -9,7 +10,7 @@ use whonex::scanner::{scan_file, ScanLimits};
 #[command(
     name = "whonex",
     version,
-    about = "WHONEX - Enterprise File Security Analysis Engine"
+    about = "WHONEX - Security Analysis Engine"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -30,6 +31,11 @@ enum Commands {
         #[arg(long, default_value_t = 20)]
         max_file_mb: u64,
     },
+
+    Web {
+        #[arg(short, long, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -46,12 +52,14 @@ fn run() -> Result<(), String> {
         Commands::Info => {
             println!("==================================");
             println!("             WHONEX");
-            println!(" Enterprise Security Analyzer");
+            println!("     Security Analysis Engine");
             println!("==================================");
             println!("Version: {}", env!("CARGO_PKG_VERSION"));
             println!("Engine: Rust");
             println!("Mode: Local-first");
-            println!("Network uploads: Disabled");
+            println!("File analysis: Available");
+            println!("Web assessment: Initial version");
+            println!("Automatic file modification: Disabled");
             println!("==================================");
         }
 
@@ -70,11 +78,9 @@ fn run() -> Result<(), String> {
                 .checked_mul(1024 * 1024)
                 .ok_or("Maximum file size is too large.")?;
 
-            let limits = ScanLimits {
-                max_file_size,
-            };
+            let limits = ScanLimits { max_file_size };
 
-            println!("WHONEX: Starting analysis...");
+            println!("WHONEX: Starting file analysis...");
 
             let report = scan_file(&file, &limits)?;
 
@@ -92,7 +98,6 @@ fn run() -> Result<(), String> {
             println!("Info: {}", report.summary.info);
 
             if report.findings.is_empty() {
-                println!();
                 println!("No matching security rules were detected.");
             } else {
                 println!();
@@ -116,13 +121,12 @@ fn run() -> Result<(), String> {
 
             if let Some(output_path) = output {
                 write_report(&report, &output_path)?;
-
-                println!();
-                println!(
-                    "JSON report saved: {}",
-                    output_path.display()
-                );
+                println!("JSON report saved: {}", output_path.display());
             }
+        }
+
+        Commands::Web { output } => {
+            web::run_interactive(output)?;
         }
     }
 
