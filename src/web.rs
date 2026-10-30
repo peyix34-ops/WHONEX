@@ -1348,16 +1348,16 @@ fn count_case_insensitive(text: &str, needle: &str) -> usize {
 
 fn count_nonempty_robots_disallow(body: &str) -> usize {
     body.lines()
-        .filter_map(|line| {
-            let trimmed = line.trim();
-            let lower = trimmed.to_ascii_lowercase();
-            lower
+        .filter(|line| {
+            let line = line.trim();
+            line.to_ascii_lowercase()
                 .strip_prefix("disallow:")
                 .map(str::trim)
-                .filter(|value| !value.is_empty())
+                .map(|value| !value.is_empty())
+                .unwrap_or(false)
         })
         .count()
-}
+} 
 
 fn safe_compact(value: &str, max_chars: usize) -> String {
     let cleaned = value
