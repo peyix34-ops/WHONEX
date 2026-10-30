@@ -1,3 +1,4 @@
+
 use std::path::Path;
 
 use crate::models::{Confidence, Finding, Severity};
@@ -13,6 +14,7 @@ pub fn analyze_text(path: &Path, text: &str) -> Vec<Finding> {
             || trimmed.starts_with('#')
             || trimmed.starts_with("//")
             || trimmed.starts_with('*')
+            || trimmed.starts_with("<!--")
         {
             continue;
         }
@@ -25,10 +27,10 @@ pub fn analyze_text(path: &Path, text: &str) -> Vec<Finding> {
                 line_number,
                 "WHX-SEC-001",
                 "Possible hardcoded secret",
-                "A possible credential or secret assignment was detected. Its validity has not been verified.",
+                "A possible hardcoded credential was detected. Its validity has not been verified.",
                 Severity::High,
                 Confidence::Medium,
-                "Remove the hardcoded value and use a secure secret manager or environment variable.",
+                "Remove hardcoded credentials and use a secure secret manager or environment variable.",
                 Some("CWE-798"),
             ));
         }
@@ -42,7 +44,7 @@ pub fn analyze_text(path: &Path, text: &str) -> Vec<Finding> {
                 "A potentially dangerous dynamic evaluation function was detected. Exploitability has not been verified.",
                 Severity::Medium,
                 Confidence::Low,
-                "Avoid evaluating dynamically supplied code. Use safer parsing or explicit allowlists.",
+                "Avoid evaluating dynamically supplied code. Prefer safer parsing and explicit allowlists.",
                 None,
             ));
         }
@@ -53,17 +55,18 @@ pub fn analyze_text(path: &Path, text: &str) -> Vec<Finding> {
             .collect();
 
         if compact.contains("shell=true")
-            && (compact.contains("subprocess") || compact.contains("popen"))
+            && (compact.contains("subprocess")
+                || compact.contains("popen"))
         {
             findings.push(make_finding(
                 path,
                 line_number,
                 "WHX-SEC-003",
                 "Potential unsafe shell execution",
-                "Subprocess shell execution was detected. Command injection risk depends on how the command is constructed.",
+                "Shell-based subprocess execution was detected. Command injection risk depends on how input is handled.",
                 Severity::High,
                 Confidence::Medium,
-                "Avoid shell execution when possible. Pass arguments separately and validate untrusted input.",
+                "Avoid shell execution where possible. Pass arguments separately and validate untrusted input.",
                 Some("CWE-78"),
             ));
         }
@@ -90,7 +93,7 @@ pub fn analyze_text(path: &Path, text: &str) -> Vec<Finding> {
                 line_number,
                 "WHX-SEC-005",
                 "Potential unsafe HTML insertion",
-                "An innerHTML assignment was detected. Cross-site scripting risk depends on the source of the inserted content.",
+                "An innerHTML assignment was detected. XSS risk depends on the source of the inserted content.",
                 Severity::Medium,
                 Confidence::Low,
                 "Use textContent for plain text or sanitize HTML with a trusted sanitizer.",
@@ -120,38 +123,56 @@ fn contains_hardcoded_secret(line: &str) -> bool {
         return false;
     }
 
-    let separator = match line.find('=').or_else(|| line.find(':')) {
-        Some(position) => position,
-        None => return false,
+    let value = line
+        .rsplit_once('=')
+        .map(|(_, value)| value)
+        .or_else(|| line.rsplit_once(':').map(|(_, value)| value));
+
+    let Some(value) = value else {
+        return false;
     };
 
-    let value = line[separator + 1..]
+    let value = value
         .trim()
-        .trim_matches(|character: char| {
-            character == ';' || character == ','
-        });
+        .trim_end_matches(';')
+        .trim()
+        .trim_end_matches(',')
+        .trim();
 
-    if !(value.starts_with('"') || value.starts_with('\'')) {
+    let Some(quote) = value.chars().next() else {
+        return false;
+    };
+
+    if quote != '"' && quote != '\'' {
         return false;
     }
 
-    let value_lower = value.to_ascii_lowercase();
+    let secret = value[quote.len_utf8()..]
+        .split(quote)
+        .next()
+        .unwrap_or("")
+        .trim();
+
+    if secret.len() < 4 {
+        return false;
+    }
 
     let placeholders = [
         "example",
         "changeme",
-        "your_",
+        "your_key",
+        "your_token",
         "replace_me",
         "placeholder",
         "dummy",
-        "test",
-        "none",
-        "null",
+        "test_value",
     ];
+
+    let secret_lower = secret.to_ascii_lowercase();
 
     !placeholders
         .iter()
-        .any(|placeholder| value_lower.contains(placeholder))
+        .any(|placeholder| secret_lower.contains(placeholder))
 }
 
 fn make_finding(
@@ -178,7 +199,7 @@ fn make_finding(
     finding.line = Some(line_number);
 
     finding.evidence = Some(
-        "A heuristic rule matched this line. Original source content is not stored in the finding."
+        "A heuristic rule matched this line. Source code content is not stored in the finding."
             .to_string(),
     );
 
@@ -193,7 +214,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detects_hardcoded_password() {
+    fn detects_possible_hardcoded_password() {
         let findings = analyze_text(
             Path::new("sample.py"),
             "password = \"real-looking-secret-value\"",
@@ -206,12 +227,9 @@ mod tests {
 
     #[test]
     fn ignores_empty_text() {
-        let findings = analyze_text(
-            Path::new("sample.py"),
-            "",
+        assert!(
+            analyze_text(Path::new("sample.py"), "").is_empty()
         );
-
-        assert!(findings.is_empty());
     }
 
     #[test]
@@ -223,6 +241,18 @@ mod tests {
 
         assert!(findings.iter().any(|finding| {
             finding.rule_id == "WHX-SEC-004"
+        }));
+    }
+
+    #[test]
+    fn detects_dynamic_evaluation() {
+        let findings = analyze_text(
+            Path::new("sample.js"),
+            "result = eval(user_input)",
+        );
+
+        assert!(findings.iter().any(|finding| {
+            finding.rule_id == "WHX-SEC-002"
         }));
     }
 }
