@@ -1,5 +1,5 @@
+
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 use super::{Finding, Severity};
 
@@ -39,7 +39,7 @@ pub struct ScanReport {
     pub schema_version: String,
     pub tool: String,
     pub version: String,
-    pub target: PathBuf,
+    pub target: String,
     pub file_size_bytes: u64,
     pub sha256: String,
     pub analysis_type: String,
@@ -49,7 +49,7 @@ pub struct ScanReport {
 
 impl ScanReport {
     pub fn new(
-        target: PathBuf,
+        target: String,
         file_size_bytes: u64,
         sha256: String,
         findings: Vec<Finding>,
