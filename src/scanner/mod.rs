@@ -5,6 +5,8 @@ pub mod rules;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::models::ScanReport;
+
 #[derive(Debug, Clone)]
 pub struct ScanLimits {
     pub max_file_size: u64,
@@ -52,6 +54,40 @@ impl ScanTarget {
             size: metadata.len(),
         })
     }
+}
+
+pub fn scan_file(
+    path: &Path,
+    limits: &ScanLimits,
+) -> Result<ScanReport, String> {
+    let target = ScanTarget::inspect(path, limits)?;
+
+    let initial_hash = hash::calculate_sha256(path, limits)?;
+
+    let content = content::read_text_file(path, limits)?;
+
+    let final_hash = hash::calculate_sha256(path, limits)?;
+
+    if initial_hash.value != final_hash.value
+        || initial_hash.bytes_hashed != content.byte_length as u64
+        || final_hash.bytes_hashed != content.byte_length as u64
+    {
+        return Err(
+            "File changed during analysis. Scan aborted.".to_string()
+        );
+    }
+
+    let findings = rules::analyze_text(
+        &target.path,
+        &content.text,
+    );
+
+    Ok(ScanReport::new(
+        target.path,
+        content.byte_length as u64,
+        final_hash.value,
+        findings,
+    ))
 }
 
 #[cfg(test)]
