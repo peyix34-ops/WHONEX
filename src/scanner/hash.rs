@@ -12,6 +12,16 @@ pub struct FileHash {
     pub bytes_hashed: u64,
 }
 
+pub fn calculate_sha256_bytes(data: &[u8]) -> FileHash {
+    let digest = Sha256::digest(data);
+
+    FileHash {
+        algorithm: "SHA-256".to_string(),
+        value: hex::encode(digest),
+        bytes_hashed: data.len() as u64,
+    }
+}
+
 pub fn calculate_sha256(
     path: &Path,
     limits: &ScanLimits,
@@ -27,38 +37,20 @@ pub fn calculate_sha256(
         return Err("File exceeds the maximum allowed size.".into());
     }
 
-    let mut file = File::open(path)
+    let file = File::open(path)
         .map_err(|e| format!("Cannot open file: {e}"))?;
 
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 8192];
-    let mut total_bytes = 0u64;
+    let mut buffer = Vec::new();
 
-    loop {
-        let bytes_read = file
-            .read(&mut buffer)
-            .map_err(|e| format!("Cannot read file: {e}"))?;
+    file.take(limits.max_file_size.saturating_add(1))
+        .read_to_end(&mut buffer)
+        .map_err(|e| format!("Cannot read file: {e}"))?;
 
-        if bytes_read == 0 {
-            break;
-        }
-
-        total_bytes += bytes_read as u64;
-
-        if total_bytes > limits.max_file_size {
-            return Err("File exceeded the maximum allowed size during reading.".into());
-        }
-
-        hasher.update(&buffer[..bytes_read]);
+    if buffer.len() as u64 > limits.max_file_size {
+        return Err("File exceeded the maximum allowed size.".into());
     }
 
-    let digest = hasher.finalize();
-
-    Ok(FileHash {
-        algorithm: "SHA-256".to_string(),
-        value: hex::encode(digest),
-        bytes_hashed: total_bytes,
-    })
+    Ok(calculate_sha256_bytes(&buffer))
 }
 
 #[cfg(test)]
@@ -70,8 +62,9 @@ mod tests {
         let expected =
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-        let actual = hex::encode(Sha256::digest(b""));
+        let actual = calculate_sha256_bytes(b"");
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.value, expected);
+        assert_eq!(actual.bytes_hashed, 0);
     }
 }
