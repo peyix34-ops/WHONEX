@@ -10,7 +10,7 @@ use whonex::scanner::{scan_file, ScanLimits};
 #[command(
     name = "whonex",
     version,
-    about = "WHONEX - Security Analysis Engine"
+    about = "WHONEX - Evidence-based Security Assessment Engine"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -50,28 +50,29 @@ fn run() -> Result<(), String> {
 
     match cli.command {
         Commands::Info => {
-            println!("==================================");
-            println!("             WHONEX");
-            println!("     Security Analysis Engine");
-            println!("==================================");
+            println!("========================================");
+            println!("                 WHONEX");
+            println!("      Evidence-based Security Engine");
+            println!("========================================");
             println!("Version: {}", env!("CARGO_PKG_VERSION"));
             println!("Engine: Rust");
             println!("Mode: Local-first");
             println!("File analysis: Available");
-            println!("Web assessment: Initial version");
+            println!("Web assessment: Low-impact external assessment");
+            println!("HTTP methods: GET and HEAD only");
+            println!("Automatic redirects: Disabled");
+            println!("Form submissions: Disabled");
+            println!("Exploit attempts: Disabled");
             println!("Automatic file modification: Disabled");
-            println!("==================================");
+            println!("========================================");
         }
-
         Commands::Scan {
             file,
             output,
             max_file_mb,
         } => {
             if max_file_mb == 0 {
-                return Err(
-                    "Maximum file size must be greater than zero.".into()
-                );
+                return Err("Maximum file size must be greater than zero.".into());
             }
 
             let max_file_size = max_file_mb
@@ -79,11 +80,9 @@ fn run() -> Result<(), String> {
                 .ok_or("Maximum file size is too large.")?;
 
             let limits = ScanLimits { max_file_size };
-
             println!("WHONEX: Starting file analysis...");
 
             let report = scan_file(&file, &limits)?;
-
             println!();
             println!("Analysis completed.");
             println!("File: {}", report.target);
@@ -102,13 +101,11 @@ fn run() -> Result<(), String> {
             } else {
                 println!();
                 println!("Detected findings:");
-
                 for finding in &report.findings {
                     let line = finding
                         .line
                         .map(|value| value.to_string())
                         .unwrap_or_else(|| "-".to_string());
-
                     println!(
                         "[{:?}] {} | {} | Line {}",
                         finding.severity,
@@ -124,7 +121,6 @@ fn run() -> Result<(), String> {
                 println!("JSON report saved: {}", output_path.display());
             }
         }
-
         Commands::Web { output } => {
             web::run_interactive(output)?;
         }
