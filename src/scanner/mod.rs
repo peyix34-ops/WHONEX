@@ -1,9 +1,10 @@
+
 pub mod content;
 pub mod hash;
 pub mod rules;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::models::ScanReport;
 
@@ -20,72 +21,51 @@ impl Default for ScanLimits {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ScanTarget {
-    pub path: PathBuf,
-    pub size: u64,
-}
-
-impl ScanTarget {
-    pub fn inspect(
-        path: &Path,
-        limits: &ScanLimits,
-    ) -> Result<Self, String> {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|e| format!("Cannot inspect file: {e}"))?;
-
-        if metadata.file_type().is_symlink() {
-            return Err("Symbolic links are not allowed.".into());
-        }
-
-        if !metadata.is_file() {
-            return Err("Target must be a regular file.".into());
-        }
-
-        if metadata.len() > limits.max_file_size {
-            return Err(format!(
-                "File exceeds the maximum allowed size of {} bytes.",
-                limits.max_file_size
-            ));
-        }
-
-        Ok(Self {
-            path: path.to_path_buf(),
-            size: metadata.len(),
-        })
-    }
-}
-
 pub fn scan_file(
     path: &Path,
     limits: &ScanLimits,
 ) -> Result<ScanReport, String> {
-    let target = ScanTarget::inspect(path, limits)?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| {
+            format!("Cannot inspect target file: {error}")
+        })?;
 
-    let initial_hash = hash::calculate_sha256(path, limits)?;
-
-    let content = content::read_text_file(path, limits)?;
-
-    let final_hash = hash::calculate_sha256(path, limits)?;
-
-    if initial_hash.value != final_hash.value
-        || initial_hash.bytes_hashed != content.byte_length as u64
-        || final_hash.bytes_hashed != content.byte_length as u64
-    {
-        return Err(
-            "File changed during analysis. Scan aborted.".to_string()
-        );
+    if metadata.file_type().is_symlink() {
+        return Err("Symbolic links are not supported.".into());
     }
 
+    if !metadata.is_file() {
+        return Err("Target must be a regular file.".into());
+    }
+
+    if metadata.len() > limits.max_file_size {
+        return Err("File exceeds the maximum allowed size.".into());
+    }
+
+    let content = content::read_text_file(
+        path,
+        limits.max_file_size,
+    )?;
+
+    let sha256 = hash::calculate_sha256(
+        content.text.as_bytes(),
+    );
+
     let findings = rules::analyze_text(
-        &target.path,
+        path,
         &content.text,
     );
 
+    let target_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown-file")
+        .to_string();
+
     Ok(ScanReport::new(
-        target.path,
+        target_name,
         content.byte_length as u64,
-        final_hash.value,
+        sha256,
         findings,
     ))
 }
