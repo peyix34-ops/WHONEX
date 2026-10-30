@@ -15,12 +15,13 @@ pub struct ScanSummary {
 
 impl ScanSummary {
     pub fn from_findings(findings: &[Finding]) -> Self {
-        let mut summary = Self::default();
-
-        summary.total_findings = findings.len();
+        let mut summary = Self {
+            total_findings: findings.len(),
+            ..Self::default()
+        };
 
         for finding in findings {
-            match finding.severity {
+            match &finding.severity {
                 Severity::Critical => summary.critical += 1,
                 Severity::High => summary.high += 1,
                 Severity::Medium => summary.medium += 1,
