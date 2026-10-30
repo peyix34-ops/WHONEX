@@ -1,3 +1,4 @@
+
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -27,7 +28,9 @@ pub fn write_report(
         drop(file);
         let _ = fs::remove_file(output_path);
 
-        return Err(format!("Cannot write report: {error}"));
+        return Err(format!(
+            "Cannot write report: {error}"
+        ));
     }
 
     Ok(())
